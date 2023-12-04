@@ -1,32 +1,70 @@
 // @ts-ignore see https://github.com/jest-community/jest-extended#setup
-import * as matchers from "jest-extended";
-import fc from "fast-check";
+import { Reducer, createStore } from ".";
+import { setSubValueAction } from "./actions";
 
-expect.extend(matchers);
-
-test("A simple test (Jest)", () => {
-  expect(1 + 1).toEqual(2);
-});
-
-test("Additional matchers (jest-extended)", () => {
-  expect([1, 0]).toIncludeSameMembers([0, 1]);
-});
-
-test("Property-based testing (fast-check)", () => {
-  type Boundaries = {
-    min: number;
-    max: number;
+export type State = {
+  value: string;
+  obj: {
+    subValue: string;
   };
+};
 
-  const minmax =
-    ({ min, max }: Boundaries) =>
-    (n: number): number =>
-      Math.min(max, Math.max(min, n));
+describe("Redux", () => {
+  it("Should create and get a store", () => {
+    // GIVEN
+    const store = createStore<State>({
+      value: "Hello",
+      obj: {
+        subValue: "Coucou",
+      },
+    });
 
-  fc.assert(
-    fc.property(fc.integer(), (n): boolean => {
-      const result = minmax({ min: 1, max: 10 })(n);
-      return 1 <= result && result <= 10;
-    })
-  );
+    // WHEN
+    const state = store.getState();
+
+    // THEN
+    expect(state.value).toEqual("Hello");
+    expect(state.obj.subValue).toEqual("Coucou");
+  });
+
+  it("Should set and get a store", () => {
+    // GIVEN
+    const subValueReducer: Reducer<State["obj"]["subValue"]> = (action) => (state) => action.payload;
+    const objReducer: Reducer<State["obj"]> = (action) => (state) => {
+      return {
+        ...state,
+        subValue: subValueReducer(action)(state.subValue),
+      };
+    };
+    const reducer: Reducer<State> = (action) => (state) => {
+      switch (action.type) {
+        case "SET_SUB_VALUE":
+          return {
+            ...state,
+            obj: objReducer(action)(state.obj),
+          };
+
+        default:
+          return state;
+      }
+    };
+    const store = createStore<State>(
+      {
+        value: "Hello",
+        obj: {
+          name: "Guillaume",
+          subValue: "Coucou",
+        },
+      },
+      [reducer],
+    );
+
+    // WHEN
+    store.dispatch(setSubValueAction("New value"));
+    const newState = store.getState();
+
+    // THEN
+    expect(newState.value).toEqual("Hello");
+    expect(newState.obj.subValue).toEqual("New value");
+  });
 });
